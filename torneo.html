@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Torneo Giallo - Tabellone Eliminazione</title>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <style>
+    body { background-color: #0f172a; color: #fff; font-family: sans-serif; padding: 20px; }
+    .card { background: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 20px; }
+    button { width: 100%; padding: 15px; background: #f59e0b; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+    input, textarea, select { width: 100%; padding: 10px; margin: 10px 0; border-radius: 5px; border: 1px solid #444; background: #0f172a; color: white; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { padding: 10px; text-align: left; border-bottom: 1px solid #334155; }
+    .match-box { background: #334155; padding: 15px; border-radius: 8px; margin: 10px 0; }
+  </style>
+</head>
+<body>
+
+<div id="setup">
+  <div class="card">
+    <h2>Configurazione Torneo</h2>
+    <input type="text" id="roomName" placeholder="Nome Stanza">
+    <textarea id="playerList" rows="6" placeholder="Lista (metà Portieri, metà Attaccanti)"></textarea>
+    <button onclick="startTournament()">Crea Torneo</button>
+  </div>
+</div>
+
+<div id="game" style="display:none;">
+  <div class="card">
+    <h2 id="title">Stanza</h2>
+    <div id="tables"></div>
+    <hr>
+    <button onclick="generateElimination()">Genera Turno Eliminazione (Migliori vs Peggiori)</button>
+    <div id="eliminationBracket"></div>
+  </div>
+</div>
+
+<script>
+  const firebaseConfig = { databaseURL: "https://torneo-calciobalillaravenna-default-rtdb.europe-west1.firebasedatabase.app" };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  function startTournament() {
+    const room = document.getElementById('roomName').value;
+    const list = document.getElementById('playerList').value.split('\n');
+    const mid = Math.floor(list.length / 2);
+    
+    const portieri = list.slice(0, mid).map(n => ({name: n, pts: 0}));
+    const attaccanti = list.slice(mid).map(n => ({name: n, pts: 0}));
+
+    db.ref('tornei/' + room).set({ portieri, attaccanti, started: true });
+    localStorage.setItem('room', room);
+    showGame(room);
+  }
+
+  function generateElimination() {
+    const room = localStorage.getItem('room');
+    db.ref('tornei/' + room).once('value', snap => {
+      const data = snap.val();
+      // Ordina per punti
+      const topP = data.portieri.sort((a,b) => b.pts - a.pts);
+      const topA = data.attaccanti.sort((a,b) => b.pts - a.pts);
+      
+      let matches = [];
+      let n = topP.length;
+      
+      // LOGICA RICHIESTA: Migliori insieme contro Peggiori insieme
+      for(let i = 0; i < n/2; i++) {
+        let team1 = `${topP[i].name} + ${topA[i].name}`;
+        let team2 = `${topP[n-1-i].name} + ${topA[n-1-i].name}`;
+        matches.push({ team1, team2, score1: 0, score2: 0 });
+      }
+      
+      db.ref('tornei/' + room + '/elimination').set(matches);
+    });
+  }
+
+  function showGame(room) {
+    document.getElementById('setup').style.display = 'none';
+    document.getElementById('game').style.display = 'block';
+    document.getElementById('title').innerText = "Stanza: " + room;
+  }
+</script>
+</body>
+</html>
